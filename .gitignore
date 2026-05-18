@@ -1,0 +1,17 @@
+# Pythoni ajutised
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Tööfailid, mida ei taha jagada
+tulemused_progress.csv
+*.geojson
+.DS_Store
+Thumbs.db
+
+# Toimetajad
+.vscode/
+.idea/
+*.swp

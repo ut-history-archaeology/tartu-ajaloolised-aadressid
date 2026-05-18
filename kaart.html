@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="et">
+<head>
+  <meta charset="utf-8" />
+  <title>Tartu ajaloolised plaanid — aadresside paigutamine</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root {
+      --c-pole: #378ADD;       /* sinine: kontrollimata */
+      --c-pole-bg: #E6F1FB;
+      --c-pole-text: #0C447C;
+      --c-kinn: #639922;       /* roheline: kinnitatud */
+      --c-kinn-bg: #EAF3DE;
+      --c-kinn-text: #27500A;
+      --c-kaht: #BA7517;       /* kollane/amber: kahtlane */
+      --c-kaht-bg: #FAEEDA;
+      --c-kaht-text: #633806;
+      --c-border: #ddd;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; font-family: system-ui, -apple-system, sans-serif; color: #222; }
+    #app { display: grid; grid-template-columns: 340px 1fr; height: 100vh; }
+    #sidebar { border-right: 1px solid var(--c-border); overflow-y: auto; padding: 12px; background: #f7f5f0; display: flex; flex-direction: column; }
+    #map { height: 100%; }
+    h1 { font-size: 15px; margin: 0 0 8px; font-weight: 500; }
+
+    /* Failihaldus */
+    .failid { display: flex; flex-direction: column; gap: 6px; padding: 8px; background: white; border: 1px solid var(--c-border); border-radius: 6px; margin-bottom: 12px; }
+    .failid label { font-size: 12px; color: #666; }
+    .failid input[type=file] { font-size: 12px; }
+    .failid .nupud { display: flex; gap: 4px; }
+    .failid button { flex: 1; padding: 5px 8px; font-size: 12px; cursor: pointer; border: 1px solid #888; background: white; border-radius: 4px; }
+    .failid button:hover { background: #eee; }
+
+    /* Filtrid */
+    .filtrid { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
+    .filtrid button { padding: 4px 8px; font-size: 12px; cursor: pointer; border: 1px solid #888; background: white; border-radius: 4px; }
+    .filtrid button.active { background: #5a3a1b; color: white; border-color: #5a3a1b; }
+
+    /* Legend */
+    .legend { font-size: 11px; color: #555; display: flex; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+    .legend .lemp { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; margin-right: 4px; }
+
+    /* Aadresside nimekiri */
+    #list-konteiner { flex: 1; overflow-y: auto; min-height: 200px; }
+    .item { padding: 6px 8px; margin: 2px 0; border-left: 4px solid #ccc; cursor: pointer; font-size: 13px; background: white; border-radius: 0 4px 4px 0; }
+    .item:hover { background: #f0e8d8; }
+    .item.selected { background: #f3e5c4; }
+    .item .meta { font-size: 11px; color: #666; margin-top: 2px; }
+    .item.kat-pole { border-left-color: var(--c-pole); }
+    .item.kat-kinnitatud { border-left-color: var(--c-kinn); }
+    .item.kat-kahtlane { border-left-color: var(--c-kaht); }
+    .item .lipik { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 4px; margin-left: 4px; }
+    .item .lipik.kat-pole { background: var(--c-pole-bg); color: var(--c-pole-text); }
+    .item .lipik.kat-kinnitatud { background: var(--c-kinn-bg); color: var(--c-kinn-text); }
+    .item .lipik.kat-kahtlane { background: var(--c-kaht-bg); color: var(--c-kaht-text); }
+
+    /* Detailipaneel valitud aadressi jaoks */
+    #detail { background: white; border: 1px solid var(--c-border); border-radius: 6px; padding: 10px; margin-top: 10px; font-size: 12px; }
+    #detail.tühi { color: #888; font-style: italic; }
+    #detail h3 { font-size: 13px; margin: 0 0 6px; font-weight: 500; }
+    #detail .info-rida { color: #666; margin: 2px 0; }
+    #detail .kategooria-valija { display: flex; gap: 4px; margin: 8px 0; }
+    #detail .kategooria-valija button { flex: 1; padding: 6px 4px; font-size: 11px; cursor: pointer; border: 1px solid var(--c-border); background: white; border-radius: 4px; }
+    #detail .kategooria-valija button.kat-pole.active { background: var(--c-pole-bg); color: var(--c-pole-text); border-color: var(--c-pole); }
+    #detail .kategooria-valija button.kat-kinnitatud.active { background: var(--c-kinn-bg); color: var(--c-kinn-text); border-color: var(--c-kinn); }
+    #detail .kategooria-valija button.kat-kahtlane.active { background: var(--c-kaht-bg); color: var(--c-kaht-text); border-color: var(--c-kaht); }
+    #detail textarea { width: 100%; min-height: 50px; font-size: 12px; font-family: inherit; padding: 4px 6px; border: 1px solid var(--c-border); border-radius: 4px; resize: vertical; }
+    #detail label { font-size: 11px; color: #666; display: block; margin: 4px 0 2px; }
+
+    .hint { font-size: 11px; color: #555; padding: 6px; background: #fffae0; border-radius: 4px; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <h1>Tartu aadressid ajaloolistel plaanidel</h1>
+
+    <div class="failid">
+      <label>Lae CSV (esimene kord või jätka pooleliolnut):</label>
+      <input type="file" id="file-input" accept=".csv" />
+      <div class="nupud">
+        <button id="save-csv" title="Salvesta progress, et hiljem jätkata">Salvesta CSV</button>
+        <button id="export-geojson" title="Lõpptulemus GeoJSON-na">Ekspordi GeoJSON</button>
+      </div>
+    </div>
+
+    <div class="hint">
+      Klõpsa nimekirjas aadress → kaart liigub kohale.
+      <b>Parem-klõps</b> kaardile määrab valitud aadressile koordinaadi.
+    </div>
+
+    <div class="legend">
+      <span><span class="lemp" style="background: var(--c-pole)"></span>kontrollimata</span>
+      <span><span class="lemp" style="background: var(--c-kinn)"></span>kinnitatud</span>
+      <span><span class="lemp" style="background: var(--c-kaht)"></span>kahtlane</span>
+    </div>
+
+    <div class="filtrid" id="filtrid"></div>
+    <div id="list-konteiner">
+      <div id="list"></div>
+    </div>
+
+    <div id="detail" class="tühi">Vali nimekirjast aadress…</div>
+  </aside>
+  <div id="map"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  // ===================================================================
+  // Kaart ja WMS-kihid
+  // ===================================================================
+  const map = L.map('map').setView([58.378, 26.729], 14);
+
+  const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '© OpenStreetMap'
+  });
+
+  const wmsUrl = 'https://teenus.maaamet.ee/ows/ajalooline-linnaplaan';
+  const wmsCommon = {
+    format: 'image/png',
+    transparent: true,
+    version: '1.3.0',
+    attribution: '© Maa- ja Ruumiamet, Rahvusarhiiv'
+  };
+
+  const tartu1914 = L.tileLayer.wms(wmsUrl, { ...wmsCommon, layers: 'tartu_plaan_1914' });
+  const tartu1927 = L.tileLayer.wms(wmsUrl, { ...wmsCommon, layers: 'tartu_plaan_1927' });
+  const tartu1938 = L.tileLayer.wms(wmsUrl, { ...wmsCommon, layers: 'tartu_plaan_1938' });
+
+  osm.addTo(map);
+  tartu1914.addTo(map);
+
+  L.control.layers(
+    { 'OSM (tänapäev)': osm },
+    {
+      'Tartu 1914': tartu1914,
+      'Tartu 1927': tartu1927,
+      'Tartu 1938': tartu1938
+    },
+    { collapsed: false }
+  ).addTo(map);
+
+  // ===================================================================
+  // Olek
+  // ===================================================================
+  // Kategooriad: 'pole' = kontrollimata (vaikimisi), 'kinnitatud', 'kahtlane'
+  let andmed = [];
+  let valitud = null;
+  const markerid = new Map();
+  let aktiivneFilter = 'all';
+
+  const VARVID = {
+    pole:        '#378ADD',
+    kinnitatud:  '#639922',
+    kahtlane:    '#BA7517',
+  };
+
+  const KAT_NIMED = {
+    pole:        'kontrollimata',
+    kinnitatud:  'kinnitatud',
+    kahtlane:    'kahtlane',
+  };
+
+  const listEl = document.getElementById('list');
+  const filtridEl = document.getElementById('filtrid');
+  const detailEl = document.getElementById('detail');
+
+  // ===================================================================
+  // Markeri joonistamine kategooria värviga
+  // ===================================================================
+  function teeIkoon(kategooria, valitudKas) {
+    const varv = VARVID[kategooria] || VARVID.pole;
+    const suurus = valitudKas ? 20 : 14;
+    const aar = valitudKas ? 3 : 2;
+    const html = `<div style="
+      width: ${suurus}px; height: ${suurus}px;
+      background: ${varv}; border: ${aar}px solid white;
+      border-radius: 50%;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    "></div>`;
+    return L.divIcon({
+      html, className: '',
+      iconSize: [suurus + aar*2, suurus + aar*2],
+      iconAnchor: [(suurus + aar*2)/2, (suurus + aar*2)/2]
+    });
+  }
+
+  function uuendaMarker(i) {
+    const r = andmed[i];
+    if (markerid.has(i)) {
+      map.removeLayer(markerid.get(i));
+      markerid.delete(i);
+    }
+    if (r.lat && r.lon) {
+      const ikoon = teeIkoon(r.kategooria || 'pole', i === valitud);
+      const m = L.marker([+r.lat, +r.lon], { icon: ikoon }).addTo(map);
+      m.bindPopup(
+        `<b>${r.tanav_algne} ${r.number_algne}</b><br>` +
+        `Kategooria: ${KAT_NIMED[r.kategooria || 'pole']}<br>` +
+        (r.aadress_taielik ? `${r.aadress_taielik}<br>` : '') +
+        (r.kommentaar ? `<i>${r.kommentaar}</i>` : '')
+      );
+      m.on('click', () => valiAadress(i));
+      markerid.set(i, m);
+    }
+  }
+
+  // ===================================================================
+  // Vasak paneel: filtrid + nimekiri + detail
+  // ===================================================================
+  function teeFiltrid() {
+    const kategooriad = ['all', 'pole', 'kinnitatud', 'kahtlane', 'puudu_koord'];
+    const sildid = {
+      all: 'kõik',
+      pole: 'kontrollimata',
+      kinnitatud: 'kinnitatud',
+      kahtlane: 'kahtlane',
+      puudu_koord: 'pole koordinaate',
+    };
+    filtridEl.innerHTML = '';
+    kategooriad.forEach(k => {
+      const b = document.createElement('button');
+      const arv = filterRead(k).length;
+      b.textContent = `${sildid[k]} (${arv})`;
+      if (k === aktiivneFilter) b.classList.add('active');
+      b.onclick = () => { aktiivneFilter = k; teeFiltrid(); joonista(); };
+      filtridEl.appendChild(b);
+    });
+  }
+
+  function filterRead(filter) {
+    if (filter === 'all') return andmed;
+    if (filter === 'puudu_koord') return andmed.filter(r => !r.lat || !r.lon);
+    return andmed.filter(r => (r.kategooria || 'pole') === filter);
+  }
+
+  function joonista() {
+    listEl.innerHTML = '';
+    filterRead(aktiivneFilter).forEach(r => {
+      const i = r._idx;
+      const kat = r.kategooria || 'pole';
+      const d = document.createElement('div');
+      d.className = `item kat-${kat}` + (i === valitud ? ' selected' : '');
+      const onKoord = r.lat && r.lon ? '✓' : '○';
+      d.innerHTML = `<b>${r.tanav_algne} ${r.number_algne}</b>
+        <span class="lipik kat-${kat}">${KAT_NIMED[kat]}</span>
+        <div class="meta">${onKoord} ${r.tanav_norm && r.tanav_norm !== r.tanav_algne ? `→ ${r.tanav_norm}` : ''}
+        ${r.esinemisi > 1 ? `· ${r.esinemisi}×` : ''}
+        ${r.kommentaar ? ' · 💬' : ''}</div>`;
+      d.onclick = () => valiAadress(i);
+      listEl.appendChild(d);
+    });
+    joonistaDetail();
+  }
+
+  function joonistaDetail() {
+    if (valitud === null || !andmed[valitud]) {
+      detailEl.className = 'tühi';
+      detailEl.innerHTML = 'Vali nimekirjast aadress…';
+      return;
+    }
+    const r = andmed[valitud];
+    const kat = r.kategooria || 'pole';
+    detailEl.className = '';
+    detailEl.innerHTML = `
+      <h3>${r.tanav_algne} ${r.number_algne}</h3>
+      <div class="info-rida">${r.tanav_norm && r.tanav_norm !== r.tanav_algne ? `Tänapäeva nimi: <b>${r.tanav_norm}</b>` : ''}</div>
+      <div class="info-rida">${r.aadress_taielik ? `In-ADS: ${r.aadress_taielik}` : ''}</div>
+      <div class="info-rida">${r.lat ? `Koord: ${(+r.lat).toFixed(5)}, ${(+r.lon).toFixed(5)}` : '<i>Koordinaadid puuduvad</i>'}</div>
+      <div class="kategooria-valija">
+        <button class="kat-pole ${kat === 'pole' ? 'active' : ''}" data-kat="pole">Kontrollimata</button>
+        <button class="kat-kinnitatud ${kat === 'kinnitatud' ? 'active' : ''}" data-kat="kinnitatud">Kinnitatud</button>
+        <button class="kat-kahtlane ${kat === 'kahtlane' ? 'active' : ''}" data-kat="kahtlane">Kahtlane</button>
+      </div>
+      <label>Kommentaar:</label>
+      <textarea id="komm-input" placeholder="Märkused, allikad, kahtluse põhjus…">${r.kommentaar || ''}</textarea>
+    `;
+    // Sündmusehaldurid
+    detailEl.querySelectorAll('.kategooria-valija button').forEach(b => {
+      b.onclick = () => {
+        andmed[valitud].kategooria = b.dataset.kat;
+        uuendaMarker(valitud);
+        teeFiltrid();
+        joonista();
+      };
+    });
+    const ki = document.getElementById('komm-input');
+    if (ki) {
+      ki.oninput = () => {
+        andmed[valitud].kommentaar = ki.value;
+        // ei rejoonista — säilitame fookuse väljal
+      };
+    }
+  }
+
+  function valiAadress(i) {
+    valitud = i;
+    joonista();
+    const r = andmed[i];
+    if (r.lat && r.lon) {
+      map.setView([+r.lat, +r.lon], 17);
+      const m = markerid.get(i);
+      if (m) m.openPopup();
+    }
+    // Uuenda valitud markeri välimust (suurem suurus)
+    andmed.forEach((_, idx) => uuendaMarker(idx));
+  }
+
+  // Parem-klõps kaardile = määra valitud aadressile koordinaat
+  map.on('contextmenu', (e) => {
+    if (valitud === null) {
+      alert('Vali kõigepealt vasakult nimekirjast üks aadress.');
+      return;
+    }
+    const r = andmed[valitud];
+    r.lat = e.latlng.lat.toFixed(7);
+    r.lon = e.latlng.lng.toFixed(7);
+    // Kategooria ei muutu automaatselt — kasutaja peab ise märkima kinnitatuks
+    uuendaMarker(valitud);
+    teeFiltrid();
+    joonista();
+  });
+
+  // ===================================================================
+  // CSV in/out — säilitab kategooria + kommentaari
+  // ===================================================================
+  function parseCSV(text) {
+    const read = text.split(/\r?\n/).filter(r => r.length > 0);
+    const headers = read[0].split(',').map(s => s.replace(/^"|"$/g, ''));
+    return read.slice(1).map(rida => {
+      const v = [];
+      let cur = '', sees = false;
+      for (let k = 0; k < rida.length; k++) {
+        const c = rida[k];
+        if (c === '"') {
+          if (sees && rida[k+1] === '"') { cur += '"'; k++; }
+          else sees = !sees;
+        } else if (c === ',' && !sees) { v.push(cur); cur = ''; }
+        else cur += c;
+      }
+      v.push(cur);
+      const obj = {};
+      headers.forEach((h, k) => obj[h] = v[k] || '');
+      obj.esinemisi = +obj.esinemisi || 1;
+      // Vaikimisi kategooria
+      if (!obj.kategooria) obj.kategooria = 'pole';
+      if (!obj.kommentaar) obj.kommentaar = '';
+      return obj;
+    });
+  }
+
+  function toCSV(read) {
+    if (!read.length) return '';
+    // Tagame, et kategooria ja kommentaar veerud on alati olemas
+    const koikValjad = new Set();
+    read.forEach(r => Object.keys(r).forEach(k => { if (!k.startsWith('_')) koikValjad.add(k); }));
+    if (!koikValjad.has('kategooria')) koikValjad.add('kategooria');
+    if (!koikValjad.has('kommentaar')) koikValjad.add('kommentaar');
+    const headers = Array.from(koikValjad);
+    const esc = s => /[",\n]/.test(String(s ?? '')) ? `"${String(s ?? '').replace(/"/g, '""')}"` : String(s ?? '');
+    return [headers.join(',')]
+      .concat(read.map(r => headers.map(h => esc(r[h])).join(',')))
+      .join('\n');
+  }
+
+  function laeAlla(failinimi, sisu, mime) {
+    const blob = new Blob([sisu], { type: mime + ';charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = failinimi;
+    a.click();
+  }
+
+  // ===================================================================
+  // GeoJSON eksport
+  // ===================================================================
+  function toGeoJSON(read) {
+    const features = read
+      .filter(r => r.lat && r.lon)
+      .map(r => ({
+        type: 'Feature',
+        geometry: {
+          type: 'Point',
+          coordinates: [+r.lon, +r.lat]
+        },
+        properties: {
+          tanav_algne: r.tanav_algne,
+          number_algne: r.number_algne,
+          tanav_norm: r.tanav_norm || '',
+          number_norm: r.number_norm || '',
+          aadress_taielik: r.aadress_taielik || '',
+          kategooria: r.kategooria || 'pole',
+          kommentaar: r.kommentaar || '',
+          esinemisi: r.esinemisi || 1,
+        }
+      }));
+    return JSON.stringify({
+      type: 'FeatureCollection',
+      name: 'Tartu_1914_aadressid',
+      crs: { type: 'name', properties: { name: 'urn:ogc:def:crs:OGC:1.3:CRS84' } },
+      features
+    }, null, 2);
+  }
+
+  // ===================================================================
+  // Sündmused
+  // ===================================================================
+  document.getElementById('file-input').addEventListener('change', async e => {
+    const fail = e.target.files[0];
+    if (!fail) return;
+    const tekst = await fail.text();
+    andmed = parseCSV(tekst);
+    // Lisa indeks meelespidamiseks (et filter ei kaotaks viidet)
+    andmed.forEach((r, i) => r._idx = i);
+    valitud = null;
+    markerid.forEach(m => map.removeLayer(m));
+    markerid.clear();
+    andmed.forEach((_, i) => uuendaMarker(i));
+    teeFiltrid();
+    joonista();
+  });
+
+  document.getElementById('save-csv').addEventListener('click', () => {
+    if (!andmed.length) { alert('Pole midagi salvestada — lae kõigepealt CSV.'); return; }
+    laeAlla('tulemused_progress.csv', toCSV(andmed), 'text/csv');
+  });
+
+  document.getElementById('export-geojson').addEventListener('click', () => {
+    if (!andmed.length) { alert('Pole midagi eksportida.'); return; }
+    const koordKoos = andmed.filter(r => r.lat && r.lon).length;
+    if (!confirm(`Ekspordin ${koordKoos} koordinaatidega aadressi GeoJSON-na (kategooriad: kontrollimata=${andmed.filter(r => (r.kategooria||'pole')==='pole').length}, kinnitatud=${andmed.filter(r => r.kategooria==='kinnitatud').length}, kahtlane=${andmed.filter(r => r.kategooria==='kahtlane').length}).`)) return;
+    laeAlla('tartu_1914_aadressid.geojson', toGeoJSON(andmed), 'application/geo+json');
+  });
+</script>
+</body>
+</html>
