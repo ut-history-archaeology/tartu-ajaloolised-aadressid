@@ -1,37 +1,16 @@
 # Tartu 1914 aadresside kaardile paigutamine
 
-Tööriist Tartu ajalooliste aadresside paigutamiseks ja kontrollimiseks Maa-ameti ajalooliste linnaplaanide peal (1914, 1927, 1938). Rakendus töötab brauseris, vajamata serverit.
+Tööriist Tartu aadresside paigutamiseks ja kontrollimiseks Maa-ameti ajalooliste linnaplaanide peal (1914, 1927, 1938). Rakendus töötab brauseris, vajamata serverit.
 
 ## Sisu
 
 - [`kaart.html`](kaart.html) — brauseripõhine kaardirakendus
-- [`tulemused.csv`](tulemused.csv) — geokodeeritud aadresside lähteandmed
+- [`tulemused.csv`](tulemused.csv) — geokodeeritud demo-aadresside lähteandmed
 - [`geocode.py`](geocode.py) — Pythoni skript, millega `tulemused.csv` genereeriti
 
 ## Andmetöötlus
 
-Aadsressid sisaldavad ~700 aadressikirjet kujul `tänav <tab> majanumber`. Enne geokodeerimist viidi sisse järgmised muudatused.
-
-### Numbri normaliseerimine
-
-Algses sisendis esinesid majanumbrid mitmesugustes kirjapiltides. Need viidi ühtsele kujule:
-
-| Algne     | Normaliseeritud | Selgitus                            |
-| --------- | --------------- | ----------------------------------- |
-| `77-a`    | `77a`           | sidekriips eemaldatud               |
-| `11-a`    | `11a`           | sidekriips eemaldatud               |
-| `1 l-a`   | `1a`            | „l“ tõenäoliselt skanneerimise viga |
-| `9 // 11` | `9`             | topeltaadress, võetud esimene       |
-| (tühi)    | (tühi)          | mõned read olid numbrita            |
-
-### Topelt-kirjapildi parandused
-
-Mõni aadress esines mitmes kirjapildis, mis tegelikult viitavad samale tänavale:
-
-| Algne kirjapilt      | Ühtlustatud kujul | Esinemisi |
-| -------------------- | ----------------- | --------- |
-| `Riia mnt`           | `Riia`            | 4         |
-| `õnne` (väiketähega) | `Õnne`            | 1         |
+Demoaadressid sisaldavad ~700 aadressikirjet kujul `tänav <tab> majanumber`. Enne geokodeerimist viidi sisse järgmised muudatused.
 
 ### Tänavanimede ajalooline kaardistus
 
