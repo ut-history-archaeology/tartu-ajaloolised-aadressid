@@ -69,6 +69,16 @@
     #detail label { font-size: 11px; color: #666; display: block; margin: 4px 0 2px; }
 
     .hint { font-size: 11px; color: #555; padding: 6px; background: #fffae0; border-radius: 4px; margin-bottom: 8px; }
+
+    /* Valitud markeri pulseeriv halo */
+    @keyframes valitud-pulse {
+      0%   { box-shadow: 0 0 0 0 rgba(233, 30, 99, 0.6), 0 2px 8px rgba(0,0,0,0.4); }
+      70%  { box-shadow: 0 0 0 14px rgba(233, 30, 99, 0), 0 2px 8px rgba(0,0,0,0.4); }
+      100% { box-shadow: 0 0 0 0 rgba(233, 30, 99, 0), 0 2px 8px rgba(0,0,0,0.4); }
+    }
+    .marker-valitud {
+      animation: valitud-pulse 1.6s ease-out infinite;
+    }
   </style>
 </head>
 <body>
@@ -171,14 +181,18 @@
   // Markeri joonistamine kategooria värviga
   // ===================================================================
   function teeIkoon(kategooria, valitudKas) {
-    const varv = VARVID[kategooria] || VARVID.pole;
-    const suurus = valitudKas ? 20 : 14;
-    const aar = valitudKas ? 3 : 2;
-    const html = `<div style="
+    // Valitud marker on tahtlikult eristuv: ere magenta (ei klapi ühegi kategooriavärviga),
+    // tunduvalt suurem ja pulseerib. Mittevalitud markeritel kategooria värv.
+    const varv = valitudKas ? '#E91E63' : (VARVID[kategooria] || VARVID.pole);
+    const suurus = valitudKas ? 28 : 14;
+    const aar = valitudKas ? 4 : 2;
+    const klass = valitudKas ? 'marker-valitud' : '';
+    const taustVari = valitudKas ? '' : 'box-shadow: 0 1px 4px rgba(0,0,0,0.4);';
+    const html = `<div class="${klass}" style="
       width: ${suurus}px; height: ${suurus}px;
       background: ${varv}; border: ${aar}px solid white;
       border-radius: 50%;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+      ${taustVari}
     "></div>`;
     return L.divIcon({
       html, className: '',
@@ -297,14 +311,36 @@
 
   function valiAadress(i) {
     valitud = i;
-    joonista();
     const r = andmed[i];
+
+    // Kui valitud aadress ei mahu praeguse filtri alla, lülita filter "kõik"-iks,
+    // et kasutaja näeks valitud rida nimekirjas.
+    if (aktiivneFilter !== 'all') {
+      const kat = r.kategooria || 'pole';
+      const koordIga = !!(r.lat && r.lon);
+      const mahub =
+        aktiivneFilter === kat ||
+        (aktiivneFilter === 'puudu_koord' && !koordIga);
+      if (!mahub) {
+        aktiivneFilter = 'all';
+        teeFiltrid();
+      }
+    }
+
+    joonista();
+
+    // Keri nimekiri valitud rea juurde (kui see on juba nähtaval, ei tee midagi)
+    const valitudEl = listEl.querySelector('.item.selected');
+    if (valitudEl) {
+      valitudEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+
     if (r.lat && r.lon) {
       map.setView([+r.lat, +r.lon], 17);
       const m = markerid.get(i);
       if (m) m.openPopup();
     }
-    // Uuenda valitud markeri välimust (suurem suurus)
+    // Uuenda valitud markeri välimust (suurem suurus + pulseering)
     andmed.forEach((_, idx) => uuendaMarker(idx));
   }
 
